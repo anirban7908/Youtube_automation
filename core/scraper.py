@@ -2,37 +2,75 @@ import requests
 from bs4 import BeautifulSoup
 from core.db_manager import DBManager
 
+
 class NewsScraper:
     def __init__(self):
         self.db = DBManager()
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36"
-        }
+
+    def task_exists(self, title):
+        return self.db.collection.find_one({"title": title}) is not None
+
+    def scrape_google_tech_news(self):
+        print("🔍 Scraping Google Tech Trends...")
+        url = "https://news.google.com/rss/headlines/section/topic/TECHNOLOGY?hl=en-US&gl=US&ceid=US:en"
+
+        try:
+            response = requests.get(url, timeout=10)
+            # Changed to "html.parser" to be safer if lxml is missing
+            soup = BeautifulSoup(response.text, "xml")
+            items = soup.find_all("item")
+
+            if not items:
+                print("⚠️ No Google News items found. Falling back...")
+                self.scrape_hacker_news()
+                return
+
+            for item in items:
+                title = item.title.text.strip()
+                link = item.link.text.strip()
+
+                if " - " in title:
+                    title = title.split(" - ")[0].strip()
+
+                if self.task_exists(title):
+                    print(f"⏭️ Skipping duplicate: {title}")
+                    continue
+
+                print(f"🔥 Trending (Google): {title}")
+                self.db.add_task(
+                    title=title, content=link, source="GoogleNews", status="pending"
+                )
+                print("✅ Task added.")
+                return
+
+            print("⚠️ No new Google Tech stories found.")
+
+        except Exception as e:
+            print(f"❌ Google Scraping Failed: {e}")
+            self.scrape_hacker_news()
 
     def scrape_hacker_news(self):
-        print("🌐 Scraping Hacker News...")
-        url = "https://news.ycombinator.com/"
-        
+        print("🔍 Scraping Hacker News...")
         try:
-            response = requests.get(url, headers=self.headers)
-            # 1. Parse the HTML
-            soup = BeautifulSoup(response.text, 'html.parser')
-            
-            # 2. Find all news titles
-            # Hacker News uses <span class="titleline"> for titles
-            links = soup.find_all('span', class_='titleline')
-            
-            count = 0
-            for item in links[:10]:  # Let's just take the top 10
-                anchor = item.find('a')
-                title = anchor.text
-                link = anchor.get('href')
-                
-                # 3. Save to MongoDB
-                self.db.add_task(title=title, content=link, source="HackerNews")
-                count += 1
-            
-            print(f"✅ Successfully saved {count} news items to MongoDB.")
-            
+            url = "https://news.ycombinator.com/"
+            response = requests.get(url, timeout=10)
+            soup = BeautifulSoup(response.text, "html.parser")
+            items = soup.find_all("span", class_="titleline")
+
+            for item in items:
+                anchor = item.find("a")
+                title = anchor.text.strip()
+                link = anchor.get("href")
+
+                if self.task_exists(title):
+                    continue
+
+                print(f"🔥 Trending (HN): {title}")
+                self.db.add_task(
+                    title=title, content=link, source="HackerNews", status="pending"
+                )
+                print("✅ Task added.")
+                return
+
         except Exception as e:
-            print(f"❌ Scraping Failed: {e}")
+            print(f"❌ Hacker News Failed: {e}")

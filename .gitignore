@@ -1,1 +1,7 @@
 .env
+venv/
+data/audio
+data/videos
+backup
+__pycache__/
+core/__pycache__/

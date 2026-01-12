@@ -1,0 +1,11 @@
+pymongo
+python-dotenv
+requests
+beautifulsoup4
+ollama
+edge-tts
+moviepy
+pillow
+fastapi
+uvicorn
+streamlit
