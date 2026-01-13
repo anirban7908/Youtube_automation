@@ -1,6 +1,7 @@
 .env
 venv/
 data/audio
+data/final_videos
 data/videos
 backup
 __pycache__/

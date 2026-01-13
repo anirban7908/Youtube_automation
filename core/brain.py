@@ -13,27 +13,28 @@ class ScriptGenerator:
             ollama.list()
             return True
         except:
-            print("❌ ERROR: Ollama is not running! Run 'ollama serve'.")
+            print("❌ ERROR: Ollama is not running!")
             return False
 
     def clean_script_text(self, text):
-        """Removes stage directions, visual cues, and actor labels."""
-        # Remove text in parentheses/brackets e.g. (Cut to black) or [Visual]
+        # Remove intros/outros
+        text = re.sub(r"^(Here is|Here's|Sure).+?:", "", text, flags=re.IGNORECASE)
+        # Remove visual directions
         text = re.sub(r"[\(\[].*?[\)\]]", "", text)
-
-        # Remove labels like "Host:", "Narrator:", "Hook:", "Scene 1:"
-        text = re.sub(
-            r"^(Hook|Body|Deep Dive|Twist|CTA|Scene \d+|Narrator|Host|Shopper):",
-            "",
-            text,
-            flags=re.MULTILINE,
-        )
-
-        # Remove asterisks often used for *emphasis* or *action*
-        text = text.replace("*", "")
-
-        # Remove extra whitespace
+        # Remove labels
+        text = re.sub(r"^(Hook|Scene \d+|Narrator):", "", text, flags=re.MULTILINE)
         return "\n".join([line.strip() for line in text.splitlines() if line.strip()])
+
+    def clean_keyword(self, text):
+        text = re.sub(r"^\d+[\.\)\-\s]+", "", text)
+        text = re.sub(
+            r"\b(visuals|eg|related to|stock footage)\b", "", text, flags=re.IGNORECASE
+        )
+        text = re.sub(r"[^\w\s]", "", text)
+        words = text.split()
+        if len(words) > 3:
+            text = " ".join(words[:3])
+        return text.strip()
 
     def generate_script(self):
         if not self.check_ollama():
@@ -46,105 +47,84 @@ class ScriptGenerator:
 
         print(f"🧠 AI generating script for: {task['title']}")
 
-        # ---------------- STEP 1: SCRIPT ----------------
+        # ---------------- STEP 1: SCRIPT (CONTENT AWARE) ----------------
+        # We now feed the Scraped Article Content into the prompt
         script_prompt = f"""
-        You are a YouTuber. Write a 40-second script for this news:
-        Topic: "{task['title']}"
-        Context: "{task.get('content', '')}"
-
-        STRICT RULES:
-        1. Write ONLY the spoken words. 
-        2. NO visual instructions like (Cut to...), NO scene labels like [Scene 1].
-        3. Tone: Shocked, viral, fast-paced.
-        4. Structure: Hook -> What Happened -> Why it Matters.
+        You are a YouTube Shorts Scriptwriter.
+        
+        NEWS SOURCE DATA:
+        "{task.get('content', '')}"
+        
+        TASK:
+        Write a viral script summarizing this news.
+        
+        STRICT CONSTRAINTS:
+        1. Total Length: 80 to 110 words MAX. (Target: 40-45 seconds).
+        2. Do NOT use the phrase "Welcome back" or "Hey guys". Start with the news.
+        3. Spoken words ONLY. No visual instructions.
+        4. Tone: Urgent, Exciting.
         """
 
         try:
             res_script = ollama.chat(
                 model=self.model, messages=[{"role": "user", "content": script_prompt}]
             )
-            raw_script = res_script["message"]["content"].strip()
-
-            # Clean it aggressively
-            clean_script = self.clean_script_text(raw_script)
+            clean_script = self.clean_script_text(
+                res_script["message"]["content"].strip()
+            )
 
             if not clean_script:
-                print("❌ Error: Script was empty after cleaning.")
                 return
 
-            # ---------------- STEP 2: SCENES (Text Parsing) ----------------
-            # Using simple text parsing is more reliable than JSON for small models
+            # ---------------- STEP 2: SCENES ----------------
             scene_prompt = f"""
-            Based on this script, list 5 visual scenes to search for on stock video sites.
             Script: "{clean_script}"
-
-            Format each line exactly like this:
-            KEYWORD | INTENT
-
-            Example:
-            empty store shelves | Showing the problem
-            shocked person face | Reaction
-            expired food label | Detail shot
-            garbage bin | Waste context
-            person holding receipt | Buying proof
-
-            Provide exactly 5 lines.
+            
+            Task: List 5 to 7 GENERIC stock video search terms.
+            Constraint: Do NOT use specific names (e.g., use "smartphone" not "iPhone 15").
+            
+            Output 1 keyword per line.
             """
 
             res_scenes = ollama.chat(
                 model=self.model, messages=[{"role": "user", "content": scene_prompt}]
             )
-            raw_scenes = res_scenes["message"]["content"].strip()
 
             parsed_scenes = []
-            for i, line in enumerate(raw_scenes.splitlines()):
-                if "|" in line:
-                    parts = line.split("|")
-                    keyword = parts[0].strip()
-                    intent = parts[1].strip() if len(parts) > 1 else "background"
+            lines = [
+                line.strip()
+                for line in res_scenes["message"]["content"].splitlines()
+                if line.strip()
+            ]
 
-                    # Clean keyword to be simple
-                    keyword = re.sub(r"[^\w\s]", "", keyword)
-
+            for i, line in enumerate(lines[:8]):
+                keyword = self.clean_keyword(line)
+                if keyword:
                     parsed_scenes.append(
                         {
                             "scene_number": i + 1,
-                            "stock_keywords": [keyword],  # List format for visuals.py
-                            "visual_intent": intent,
+                            "stock_keywords": [keyword],
+                            "visual_intent": "context",
                         }
                     )
 
-            # Fallback if parsing failed
-            if not parsed_scenes:
-                parsed_scenes = [
-                    {
-                        "scene_number": 1,
-                        "stock_keywords": ["shocked face"],
-                        "visual_intent": "Hook",
-                    },
-                    {
-                        "scene_number": 2,
-                        "stock_keywords": ["store shelves"],
-                        "visual_intent": "Context",
-                    },
-                    {
-                        "scene_number": 3,
-                        "stock_keywords": ["receipt paper"],
-                        "visual_intent": "Detail",
-                    },
-                    {
-                        "scene_number": 4,
-                        "stock_keywords": ["money waste"],
-                        "visual_intent": "Impact",
-                    },
-                    {
-                        "scene_number": 5,
-                        "stock_keywords": ["question mark"],
-                        "visual_intent": "CTA",
-                    },
+            # Ensure minimum scenes
+            if len(parsed_scenes) < 4:
+                defaults = [
+                    "breaking news",
+                    "technology abstract",
+                    "shocked face",
+                    "money",
                 ]
+                for i in range(len(parsed_scenes), 4):
+                    parsed_scenes.append(
+                        {
+                            "scene_number": i + 1,
+                            "stock_keywords": [defaults[i]],
+                            "visual_intent": "fallback",
+                        }
+                    )
 
-            # ---------------- STEP 3: SAVE ----------------
             self.db.collection.update_one(
                 {"_id": task["_id"]},
                 {
@@ -155,9 +135,7 @@ class ScriptGenerator:
                     }
                 },
             )
-            print("✅ Script saved & Cleaned!")
-            print(f"📜 Preview: {clean_script[:50]}...")
-            print(f"🎬 Scenes: {[s['stock_keywords'][0] for s in parsed_scenes]}")
+            print(f"✅ Script generated ({len(clean_script.split())} words).")
 
         except Exception as e:
-            print(f"❌ ScriptGenerator Error: {e}")
+            print(f"❌ Brain Error: {e}")

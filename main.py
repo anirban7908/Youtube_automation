@@ -11,7 +11,7 @@ async def run_pipeline():
 
     # STEP 1: Scrape News (Uncommented so you actually get data)
     try:
-        NewsScraper().scrape_google_tech_news()
+        NewsScraper().scrape_top_trends()
     except Exception as e:
         print(f"⚠️ Scraper warning: {e}")
 
