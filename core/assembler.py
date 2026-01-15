@@ -1,10 +1,12 @@
 import os
 import whisper
 import moviepy.video.fx as vfx
-from moviepy import VideoFileClip, AudioFileClip, TextClip, CompositeVideoClip
+from moviepy import AudioFileClip, TextClip, CompositeVideoClip, ImageClip
 from moviepy.audio.AudioClip import CompositeAudioClip
 from core.db_manager import DBManager
 
+# NOTE: Ensure this path is correct for your system.
+# If deploying to Linux, you will need to change this to a Linux font path (e.g., /usr/share/fonts/...)
 FONT_PATH = r"C:\Windows\Fonts\arial.ttf"
 BGM_PATH = r"data/music/background.mp3"
 
@@ -14,109 +16,96 @@ class VideoAssembler:
         self.db = DBManager()
         self.output_dir = "data/final_videos"
         os.makedirs(self.output_dir, exist_ok=True)
-        # Use "base" or "tiny" model for speed
         self.model = whisper.load_model("base")
 
     def assemble(self):
         task = self.db.collection.find_one({"status": "ready_to_assemble"})
         if not task:
-            print("📭 No tasks ready for assembly.")
+            print("📭 No tasks ready.")
             return
 
-        print(f"🎬 Gapless Smart-Sync: {task['title']}")
+        print(f"🎬 Assembly with Ken Burns: {task['title']}")
 
-        # 1. Load Audio
         audio = AudioFileClip(task["audio_path"])
         total_duration = audio.duration
 
-        # 2. Transcribe
         print("🎙️ Analyzing audio timing...")
         result = self.model.transcribe(task["audio_path"], word_timestamps=True)
         segments = result["segments"]
 
         visual_scenes = task.get("visual_scenes", [])
         if not visual_scenes:
-            print("❌ No visual scenes found.")
             return
 
         timeline_clips = []
         caption_clips = []
 
-        # 3. Build Timeline (Video)
         for i, segment in enumerate(segments):
             start_time = segment["start"]
-
-            # Gapless Logic: Extend clip to start of next sentence
-            if i < len(segments) - 1:
-                end_time = segments[i + 1]["start"]
-            else:
-                end_time = total_duration
-
+            end_time = (
+                segments[i + 1]["start"] if i < len(segments) - 1 else total_duration
+            )
             block_duration = end_time - start_time
             if block_duration <= 0:
                 continue
 
             scene_index = i % len(visual_scenes)
-            scene_data = visual_scenes[scene_index]
-            clips = scene_data.get("clips", [])
+            path = visual_scenes[scene_index]["path"]
 
-            if not clips:
-                continue
+            try:
+                # 1. Create Image Clip
+                img_clip = ImageClip(path).with_duration(block_duration)
 
-            num_clips = len(clips)
-            clip_duration = block_duration / num_clips
-            current_clip_start = start_time
+                # 2. Apply Dynamic Zoom (Ken Burns)
+                # We crop a slightly smaller window and move it, or just zoom in center
+                # Simple Center Zoom Logic for MoviePy:
+                img_clip = img_clip.resized(height=1920)
+                if img_clip.w > 1080:
+                    img_clip = img_clip.cropped(x_center=img_clip.w / 2, width=1080)
 
-            for clip_info in clips:
-                path = clip_info["path"]
-                try:
-                    v = VideoFileClip(path).without_audio()
+                # The Trick: Resize from 1.0 to 1.15 over time
+                img_clip = img_clip.with_effects([vfx.Resize(lambda t: 1 + 0.05 * t)])
 
-                    if v.duration < clip_duration:
-                        v = v.with_effects([vfx.Loop(duration=clip_duration)])
-                    else:
-                        v = v.subclipped(0, clip_duration)
+                # Re-crop to ensure it stays 1080x1920 after zooming
+                img_clip = img_clip.cropped(
+                    x_center=img_clip.w / 2,
+                    y_center=img_clip.h / 2,
+                    width=1080,
+                    height=1920,
+                )
 
-                    # Resize/Crop 9:16
-                    v = v.resized(height=1920)
-                    if v.w > 1080:
-                        v = v.cropped(x_center=v.w / 2, width=1080)
+                img_clip = img_clip.with_start(start_time)
+                timeline_clips.append(img_clip)
 
-                    v = v.with_start(current_clip_start).with_duration(clip_duration)
-                    timeline_clips.append(v)
-                    current_clip_start += clip_duration
+            except Exception as e:
+                print(f"⚠️ Clip error: {e}")
 
-                except Exception as e:
-                    print(f"⚠️ Clip error: {path} -> {e}")
-
-            # 4. Captions (FIXED POSITION - MOVED HIGHER)
+            # Captions
             for word in segment["words"]:
                 w_start = word["start"]
                 w_end = max(word["end"], w_start + 0.1)
-
-                # Padding spaces to protect outline
                 safe_text = f" {word['word'].strip().upper()} "
 
                 caption = (
                     TextClip(
                         text=safe_text,
                         font=FONT_PATH,
-                        font_size=65,  # Slightly smaller font
+                        font_size=75,
                         color="yellow",
                         stroke_color="black",
                         stroke_width=4,
+                        margin=(20, 20),
                     )
                     .with_start(w_start)
                     .with_duration(w_end - w_start)
-                    # Position moved UP to Y=1000 (Safe zone)
-                    .with_position(("center", 1000))
+                    # UPDATED POSITION:
+                    # "center" horizontally.
+                    # 1600 vertically (Total height is 1920, so 1600 is near the bottom).
+                    .with_position(("center", 1600))
                 )
-
                 caption_clips.append(caption)
 
-        # 5. Final Render
         if not timeline_clips:
-            print("❌ Error: No video clips generated.")
             return
 
         bg_video = CompositeVideoClip(timeline_clips, size=(1080, 1920)).with_duration(
@@ -138,8 +127,8 @@ class VideoAssembler:
         )
 
         out_path = os.path.join(self.output_dir, f"FINAL_{task['_id']}.mp4")
+        print("📦 Rendering...")
 
-        print("📦 Rendering synchronized video...")
         try:
             final_video.write_videofile(
                 out_path,
@@ -154,14 +143,11 @@ class VideoAssembler:
                 {"$set": {"status": "completed", "final_video_path": out_path}},
             )
             print(f"🎉 DONE: {out_path}")
-
         except Exception as e:
             print(f"❌ Render Failed: {e}")
         finally:
             try:
                 final_video.close()
                 audio.close()
-                for c in timeline_clips:
-                    c.close()
             except:
                 pass

@@ -1,184 +1,155 @@
 import os
+import time
 import requests
+import urllib.parse
 import random
 from dotenv import load_dotenv
-from moviepy import VideoFileClip
+from PIL import Image, ImageDraw, ImageFont
 from core.db_manager import DBManager
 
+# Load environment variables
 load_dotenv()
 
 
 class VisualScout:
     def __init__(self):
         self.db = DBManager()
-        self.pexels_key = os.getenv("PEXELS_API_KEY")
-        self.pixabay_key = os.getenv("PIXABAY_API_KEY")
-        self.output_dir = "data/videos"
+        self.output_dir = "data/images"
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def get_video_duration(self, path):
+        # 1. GET THE API KEY
+        self.api_key = os.getenv("POLLINATIONS_API_KEY")
+
+        if not self.api_key:
+            print("⚠️ NOTE: No POLLINATIONS_API_KEY found in .env.")
+            print(
+                "   You might hit rate limits. Sign up at enter.pollinations.ai for a free key."
+            )
+        else:
+            print("✅ Pollinations API Key detected. Using authenticated access.")
+
+    def generate_placeholder(self, text, task_id, index):
+        """Final fallback: Creates a simple text image so the video finishes."""
+        filename = f"{task_id}_scene_{index}.jpg"
+        path = os.path.join(self.output_dir, filename)
+
+        # Create dark background
+        img = Image.new("RGB", (1024, 1024), color=(10, 10, 20))
+        d = ImageDraw.Draw(img)
+
         try:
-            with VideoFileClip(path) as clip:
-                return clip.duration
+            font = ImageFont.truetype("arial.ttf", 40)
         except:
-            return 0
+            font = ImageFont.load_default()
 
-    def search_pexels(self, query):
-        """Search Pexels API"""
-        if not self.pexels_key:
-            return []
+        display_text = f"SCENE {index+1}\n\n(Visual Unavailable)\n\n{text[:80]}..."
+        d.text((50, 450), display_text, fill=(200, 200, 200), font=font)
 
-        headers = {"Authorization": self.pexels_key}
-        url = f"https://api.pexels.com/videos/search?query={query}&orientation=portrait&per_page=5"
+        img.save(path)
+        print(f"      ⚠️ Saved Placeholder: {filename}")
+        return path
+
+    def is_valid_image(self, path):
+        """
+        Smart Check: Detects if Pollinations sent the 'Rate Limit' pixel-art card.
+        The error card has very few colors (<256). Real AI photos have thousands.
+        """
         try:
-            res = requests.get(url, headers=headers, timeout=5).json()
-            return [
-                v["video_files"][0]["link"]
-                for v in res.get("videos", [])
-                if v.get("video_files")
-            ]
-        except Exception as e:
-            print(f"   ⚠️ Pexels error: {e}")
-            return []
+            with Image.open(path) as img:
+                colors = img.getcolors(maxcolors=2000)
+                if colors:
+                    print(f"      ⚠️ Detected 'Rate Limit' Error Card. Retrying...")
+                    return False
+                return True
+        except Exception:
+            return True
 
-    def search_pixabay(self, query):
-        """Search Pixabay API"""
-        if not self.pixabay_key:
-            return []
+    def generate_ai_image(self, prompt, task_id, index):
+        filename = f"{task_id}_scene_{index}.jpg"
+        path = os.path.join(self.output_dir, filename)
 
-        url = f"https://pixabay.com/api/videos/?key={self.pixabay_key}&q={query}&per_page=5"
-        try:
-            res = requests.get(url, timeout=5).json()
-            return [v["videos"]["medium"]["url"] for v in res.get("hits", [])]
-        except Exception as e:
-            print(f"   ⚠️ Pixabay error: {e}")
-            return []
+        print(f"   🎨 Painting Scene {index+1}...")
+
+        safe_prompt = urllib.parse.quote(prompt)
+
+        # 2. ADD KEY TO URL
+        auth_param = f"&key={self.api_key}" if self.api_key else ""
+
+        # 3. HEADER (Just to be safe)
+        headers = {}
+        if self.api_key:
+            headers["Authorization"] = f"Bearer {self.api_key}"
+
+        # RETRY LOGIC
+        for attempt in range(1, 3):
+            try:
+                # 4. RANDOM SEED (CRITICAL FIX)
+                # We generate a new seed for every single attempt.
+                # This prevents the server from sending us a cached "Same Image".
+                seed = random.randint(1, 10000000)
+
+                # URL with Seed
+                url = f"https://image.pollinations.ai/prompt/{safe_prompt}?width=1024&height=1024&model=flux&nologo=true&seed={seed}{auth_param}"
+
+                # 5. INCREASED TIMEOUT
+                # Flux is slow. We give it 60 seconds now.
+                response = requests.get(url, headers=headers, timeout=180)
+
+                if response.status_code == 200:
+                    with open(path, "wb") as f:
+                        f.write(response.content)
+
+                    # Double check we didn't get the error card
+                    if self.is_valid_image(path):
+                        print(f"      ✅ Success: {filename}")
+                        return path
+                else:
+                    print(f"      ❌ Error {response.status_code}")
+
+            except Exception as e:
+                print(f"      ❌ Connection Error: {e}")
+
+            # If failed, wait a bit
+            print(f"      ⏳ Attempt {attempt} failed. Retrying...")
+            time.sleep(5)
+
+        # Fallback
+        return self.generate_placeholder(prompt, task_id, index)
 
     def download_visuals(self):
         task = self.db.collection.find_one({"status": "voiced"})
         if not task:
-            print("📭 No voiced tasks found.")
             return
 
         scenes = task.get("scenes", [])
         if not scenes:
-            print("❌ No scenes found.")
-            scenes = [
-                {
-                    "scene_number": 1,
-                    "stock_keywords": [task["title"]],
-                    "visual_intent": "fallback",
-                }
-            ]
+            return
 
-        print(f"🎬 Hybrid Visual Scout: {task['title']}")
+        print(f"🎬 Generative Artist: {task['title']}")
+        scene_assets = []
 
-        scene_clips = []
-        total_duration = 0
-        target_duration = int(task.get("audio_duration", 60)) + 5
+        for i, scene in enumerate(scenes):
+            prompt = scene.get("image_prompt", "")
+            if len(prompt) < 3:
+                continue
 
-        for scene in scenes:
-            # Handle string data fix
-            if isinstance(scene, str):
-                scene = {
-                    "scene_number": 1,
-                    "stock_keywords": [scene],
-                    "visual_intent": "fallback",
-                }
+            # Generate
+            img_path = self.generate_ai_image(prompt, task["_id"], i)
 
-            scene_id = scene.get("scene_number", "unknown")
-            keywords = scene.get("stock_keywords", [])
-
-            # Ensure keywords is a list
-            if isinstance(keywords, str):
-                keywords = [k.strip() for k in keywords.split(",")]
-            if not keywords:
-                keywords = ["technology background"]
-
-            print(f"🔍 Scene {scene_id}: {keywords}")
-
-            clips_for_scene = []
-
-            for term in keywords[:2]:
-                # --- STRATEGY: Try Pexels First, Then Pixabay ---
-                video_urls = self.search_pexels(term)
-
-                # If Pexels fails or returns nothing, try Pixabay
-                if not video_urls:
-                    # print(f"   Shape-shift: Pexels empty for '{term}', trying Pixabay...")
-                    video_urls = self.search_pixabay(term)
-
-                if not video_urls:
-                    print(f"   ❌ No videos found for '{term}' on either platform.")
-                    continue
-
-                # Download random video from results
-                v_url = random.choice(video_urls)
-                filename = (
-                    f"{task['_id']}_scene{scene_id}_{random.randint(100,999)}.mp4"
+            if img_path:
+                scene_assets.append(
+                    {"scene_number": i + 1, "type": "image", "path": img_path}
                 )
-                path = os.path.join(self.output_dir, filename)
 
-                try:
-                    with requests.get(v_url, stream=True) as r:
-                        with open(path, "wb") as f:
-                            for chunk in r.iter_content(1024 * 1024):
-                                f.write(chunk)
+            # Shorter delay needed now that you are authenticated!
+            time.sleep(3)
 
-                    duration = self.get_video_duration(path)
-                    total_duration += duration
-                    clips_for_scene.append(
-                        {"scene": scene_id, "path": path, "duration": duration}
-                    )
-                    print(f"   ⬇️ Secured clip ({duration:.1f}s)")
-                except Exception as e:
-                    print(f"   ⚠️ Download failed: {e}")
-
-            if clips_for_scene:
-                scene_clips.append({"scene_number": scene_id, "clips": clips_for_scene})
-
-        # --- FALLBACK LOOP ---
-        fallback_terms = [
-            "abstract loop",
-            "news background",
-            "digital connection",
-            "blue futuristic",
-        ]
-        while total_duration < target_duration:
-            term = random.choice(fallback_terms)
-            print(f"➕ Adding fallback: {term}")
-
-            # Try Pixabay for fallbacks (usually better for loops)
-            urls = self.search_pixabay(term)
-            if not urls:
-                urls = self.search_pexels(term)
-
-            if urls:
-                v_url = random.choice(urls)
-                path = os.path.join(
-                    self.output_dir,
-                    f"{task['_id']}_fallback_{random.randint(1000,9999)}.mp4",
-                )
-                try:
-                    with requests.get(v_url, stream=True) as r:
-                        with open(path, "wb") as f:
-                            for chunk in r.iter_content(1024 * 1024):
-                                f.write(chunk)
-                    duration = self.get_video_duration(path)
-                    total_duration += duration
-                    scene_clips.append(
-                        {
-                            "scene_number": "fallback",
-                            "clips": [{"path": path, "duration": duration}],
-                        }
-                    )
-                except:
-                    pass
-            else:
-                break  # Avoid infinite loop if internet is down
+        if not scene_assets:
+            print("❌ Critical: No images generated.")
+            return
 
         self.db.collection.update_one(
             {"_id": task["_id"]},
-            {"$set": {"visual_scenes": scene_clips, "status": "ready_to_assemble"}},
+            {"$set": {"visual_scenes": scene_assets, "status": "ready_to_assemble"}},
         )
-        print(f"✅ Visuals ready ({total_duration:.1f}s)")
+        print(f"✅ Secured {len(scene_assets)} Assets.")

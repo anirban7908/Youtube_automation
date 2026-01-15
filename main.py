@@ -4,6 +4,14 @@ from core.brain import ScriptGenerator
 from core.voice import VoiceEngine
 from core.visuals import VisualScout
 from core.assembler import VideoAssembler
+from datetime import datetime
+
+# Get the current date and time
+start = datetime.now()
+
+# Print only the time in a specific format (HH:MM:SS)
+start_time = start.strftime("%H:%M:%S")
+print("Start Time =", start_time)
 
 
 async def run_pipeline():
@@ -28,6 +36,11 @@ async def run_pipeline():
     VideoAssembler().assemble()
 
     print("✅ Pipeline completed successfully")
+
+    # Get the current date and time
+    start = datetime.now()
+    end_time = start.strftime("%H:%M:%S")
+    print("End Time =", end_time)
 
 
 if __name__ == "__main__":

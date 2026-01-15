@@ -1,5 +1,6 @@
 .env
 venv/
+data/images
 data/audio
 data/final_videos
 data/videos
