@@ -20,7 +20,10 @@ class DBManager:
     # -------------------------------
     # CREATE
     # -------------------------------
-    def add_task(self, title, content, source="manual", status="pending"):
+    # UPDATE THIS METHOD IN YOUR db_manager.py
+    def add_task(
+        self, title, content, source="manual", status="pending", extra_data=None
+    ):
         task = {
             "title": title,
             "content": content,
@@ -32,12 +35,17 @@ class DBManager:
                 "visual_paths": [],
                 "final_video_path": None,
             },
+            # Merges niche info if provided
+            **(
+                {"niche": extra_data["niche"]}
+                if extra_data and "niche" in extra_data
+                else {}
+            ),
             "created_at": datetime.utcnow(),
             "updated_at": datetime.utcnow(),
         }
-
         self.collection.insert_one(task)
-        print(f"📥 Task added: {title} [{status}]")
+        print(f"📥 Task added: {title}")
 
     # -------------------------------
     # READ

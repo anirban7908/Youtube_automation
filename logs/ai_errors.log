@@ -1,0 +1,74 @@
+2026-02-15 00:11:00,267 - ERROR - [HuggingFace] FAILED for prompt: 'A delicate porcelain doll with...' | Reason: Status 410: {"error":"https://api-inference.huggingface.co is no longer supported. Please use https://router.huggingface.co instead."}
+2026-02-15 00:11:01,057 - ERROR - [Pollinations] FAILED for prompt: 'A delicate porcelain doll with...' | Reason: Status 530
+2026-02-15 00:11:05,593 - ERROR - [HuggingFace] FAILED for prompt: 'A 19th-century wedding ring, r...' | Reason: Status 410: {"error":"https://api-inference.huggingface.co is no longer supported. Please use https://router.huggingface.co instead."}
+2026-02-15 00:11:06,357 - ERROR - [Pollinations] FAILED for prompt: 'A 19th-century wedding ring, r...' | Reason: Status 530
+2026-02-15 00:11:10,529 - ERROR - [HuggingFace] FAILED for prompt: 'A vintage typewriter, surround...' | Reason: Status 410: {"error":"https://api-inference.huggingface.co is no longer supported. Please use https://router.huggingface.co instead."}
+2026-02-15 00:11:11,256 - ERROR - [Pollinations] FAILED for prompt: 'A vintage typewriter, surround...' | Reason: Status 530
+2026-02-15 00:11:15,745 - ERROR - [HuggingFace] FAILED for prompt: 'A beautifully crafted wooden b...' | Reason: Status 410: {"error":"https://api-inference.huggingface.co is no longer supported. Please use https://router.huggingface.co instead."}
+2026-02-15 00:11:16,575 - ERROR - [Pollinations] FAILED for prompt: 'A beautifully crafted wooden b...' | Reason: Status 530
+2026-02-15 00:11:20,211 - ERROR - [HuggingFace] FAILED for prompt: 'A delicate porcelain vase fill...' | Reason: Status 410: {"error":"https://api-inference.huggingface.co is no longer supported. Please use https://router.huggingface.co instead."}
+2026-02-15 00:11:20,961 - ERROR - [Pollinations] FAILED for prompt: 'A delicate porcelain vase fill...' | Reason: Status 530
+2026-02-15 00:11:24,832 - ERROR - [HuggingFace] FAILED for prompt: 'An old, leather-bound book ado...' | Reason: Status 410: {"error":"https://api-inference.huggingface.co is no longer supported. Please use https://router.huggingface.co instead."}
+2026-02-15 00:11:25,559 - ERROR - [Pollinations] FAILED for prompt: 'An old, leather-bound book ado...' | Reason: Status 530
+2026-02-15 00:20:17,694 - ERROR - [HuggingFace] FAILED for prompt: 'An ancient, leather-bound book...' | Reason: Network Exception: Expecting value: line 1 column 1 (char 0)
+2026-02-15 00:20:18,813 - ERROR - [Pollinations] FAILED for prompt: 'An ancient, leather-bound book...' | Reason: Status 530
+2026-02-15 00:20:23,324 - ERROR - [HuggingFace] FAILED for prompt: 'A faded, hand-painted portrait...' | Reason: Network Exception: Expecting value: line 1 column 1 (char 0)
+2026-02-15 00:20:24,083 - ERROR - [Pollinations] FAILED for prompt: 'A faded, hand-painted portrait...' | Reason: Status 530
+2026-02-15 00:20:29,278 - ERROR - [HuggingFace] FAILED for prompt: 'A collection of antique keys s...' | Reason: Network Exception: Expecting value: line 1 column 1 (char 0)
+2026-02-15 00:20:30,050 - ERROR - [Pollinations] FAILED for prompt: 'A collection of antique keys s...' | Reason: Status 530
+2026-02-15 00:20:34,812 - ERROR - [HuggingFace] FAILED for prompt: 'A worn, wooden chest adorned w...' | Reason: Network Exception: Expecting value: line 1 column 1 (char 0)
+2026-02-15 00:20:35,601 - ERROR - [Pollinations] FAILED for prompt: 'A worn, wooden chest adorned w...' | Reason: Status 530
+2026-02-15 00:20:40,311 - ERROR - [HuggingFace] FAILED for prompt: 'A forgotten, silver locket con...' | Reason: Network Exception: Expecting value: line 1 column 1 (char 0)
+2026-02-15 00:20:41,102 - ERROR - [Pollinations] FAILED for prompt: 'A forgotten, silver locket con...' | Reason: Status 530
+2026-02-15 00:20:45,967 - ERROR - [HuggingFace] FAILED for prompt: 'A dusty, old globe sitting ato...' | Reason: Network Exception: Expecting value: line 1 column 1 (char 0)
+2026-02-15 00:20:46,689 - ERROR - [Pollinations] FAILED for prompt: 'A dusty, old globe sitting ato...' | Reason: Status 530
+2026-02-15 01:52:28,743 [HuggingFace] Exception: HTTPSConnectionPool(host='router.huggingface.co', port=443): Read timed out. (read timeout=45)
+2026-02-15 01:52:29,653 [Pollinations] Status 530
+2026-02-15 02:37:52,359 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:37:53,376 [Pollinations] Status 530
+2026-02-15 02:37:58,208 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:37:59,217 [Pollinations] Status 530
+2026-02-15 02:38:04,542 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:38:05,566 [Pollinations] Status 530
+2026-02-15 02:38:10,377 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:38:11,508 [Pollinations] Status 530
+2026-02-15 02:38:16,522 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:38:17,545 [Pollinations] Status 530
+2026-02-15 02:38:22,256 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:38:23,374 [Pollinations] Status 530
+2026-02-15 02:38:28,810 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:38:30,960 [Pollinations] Status 530
+2026-02-15 02:38:36,184 [HuggingFace] Status 402: {"error":"Credit balance is depleted: purchase pre-paid credits to continue using Inference Provider
+2026-02-15 02:38:37,308 [Pollinations] Status 530
+2026-02-15 03:18:15,467 [HuggingFace] Status 404
+2026-02-15 03:18:38,300 [DeepAI] Status 402
+2026-02-15 03:18:43,318 [HuggingFace] Status 404
+2026-02-15 03:18:44,858 [DeepAI] Status 402
+2026-02-15 03:18:49,564 [HuggingFace] Status 404
+2026-02-15 03:18:51,919 [DeepAI] Status 402
+2026-02-15 03:18:56,629 [HuggingFace] Status 404
+2026-02-15 03:18:58,370 [DeepAI] Status 402
+2026-02-15 03:19:02,466 [HuggingFace] Status 404
+2026-02-15 03:19:04,208 [DeepAI] Status 402
+2026-02-15 03:19:08,406 [HuggingFace] Status 404
+2026-02-15 03:19:10,349 [DeepAI] Status 402
+2026-02-15 03:19:14,960 [HuggingFace] Status 404
+2026-02-15 03:19:37,630 [DeepAI] Status 402
+2026-02-15 03:19:41,526 [HuggingFace] Status 404
+2026-02-15 03:19:43,244 [DeepAI] Status 402
+2026-02-15 03:33:47,246 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:33:49,172 [DeepAI] Status 402
+2026-02-15 03:33:53,558 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:33:55,503 [DeepAI] Status 402
+2026-02-15 03:34:01,877 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:34:03,695 [DeepAI] Status 402
+2026-02-15 03:34:08,201 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:34:11,683 [DeepAI] Status 402
+2026-02-15 03:34:15,933 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:34:17,694 [DeepAI] Status 402
+2026-02-15 03:34:22,167 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:34:24,278 [DeepAI] Status 402
+2026-02-15 03:34:29,476 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:34:31,343 [DeepAI] Status 402
+2026-02-15 03:34:35,541 [HuggingFace] Status 404 - Not Found
+2026-02-15 03:34:37,374 [DeepAI] Status 402

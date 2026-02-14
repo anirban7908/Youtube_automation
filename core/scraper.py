@@ -1,172 +1,135 @@
 import requests
-import ollama
+import feedparser
 import random
-from bs4 import BeautifulSoup
+import datetime
 from core.db_manager import DBManager
 
 
 class NewsScraper:
     def __init__(self):
         self.db = DBManager()
-        self.model = "llama3.2:3b"
         self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         }
 
-    def task_exists(self, title):
-        return self.db.collection.find_one({"title": title}) is not None
-
-    def fetch_full_content(self, url):
-        try:
-            response = requests.get(url, headers=self.headers, timeout=5)
-            soup = BeautifulSoup(response.content, "html.parser")
-            paragraphs = soup.find_all("p")
-            text = " ".join([p.get_text().strip() for p in paragraphs[:4]])
-            return text[:2000]
-        except:
-            return ""
-
-    def pick_viral_news(self, news_list):
-        if not news_list:
-            return None
-
-        print(f"🧠 AI analyzing {len(news_list)} candidates for SAFETY and VIRALITY...")
-
-        random.shuffle(news_list)
-        candidates = news_list[:20]
-
-        list_text = "\n".join(
-            [f"{i+1}. {item['title']}" for i, item in enumerate(candidates)]
-        )
-
-        # UPGRADED PROMPT: STRICT SAFETY RULES
-        prompt = f"""
-        You are a YouTube Content Strategist for a family-friendly tech channel.
-        Here are trending stories:
-        
-        {list_text}
-        
-        TASK: Pick the ONE story that is VIRAL but SAFE.
-        
-        STRICT SAFETY RULES (DO NOT PICK THESE):
-        - NO Politics, Government, FBI, Police, Lawsuits.
-        - NO Crimes, Arrests, Death, Tragedy.
-        - NO Sexual content or Scandals.
-        
-        GOOD TOPICS:
-        - New Gadgets (iPhones, Robots).
-        - Cool Science (Space, Aliens, Energy).
-        - Business Tech (Companies buying companies).
-        
-        Reply ONLY with the number (e.g. "5"). If none are safe, reply "0".
-        """
-
-        try:
-            response = ollama.chat(
-                model=self.model, messages=[{"role": "user", "content": prompt}]
-            )
-            choice = response["message"]["content"].strip()
-
-            import re
-
-            match = re.search(r"\d+", choice)
-            if match:
-                index = int(match.group()) - 1
-                if 0 <= index < len(candidates):
-                    return candidates[index]
-            return candidates[0]  # Fallback (hopefully safe)
-        except:
-            return candidates[0]
-
-    def scrape_top_trends(self):
-        print("🔍 Scraping Tech Sources...")
-
-        # Removed "Google Tech" because it often has political news
-        # Sticking to gadget-focused sites is safer
-        sources = [
-            {"name": "The Verge", "url": "https://www.theverge.com/rss/index.xml"},
-            {"name": "TechCrunch", "url": "https://techcrunch.com/feed/"},
-            {"name": "Engadget", "url": "https://www.engadget.com/rss.xml"},
-            {
-                "name": "Ars Technica",
-                "url": "https://feeds.arstechnica.com/arstechnica/index",
+        # 🗓️ RELIABLE SOURCES
+        self.niche_map = {
+            "morning": {
+                "niche": "finance",
+                "sources": [
+                    "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",  # CNBC Finance
+                    "https://www.investing.com/rss/news.rss",  # Investing.com
+                    "https://feeds.marketwatch.com/marketwatch/topstories/",  # MarketWatch
+                ],
             },
+            "noon": {
+                "niche": "tech",
+                "sources": [
+                    "http://feeds.feedburner.com/TechCrunch/",
+                    "https://www.theverge.com/rss/index.xml",
+                ],
+            },
+            "evening": {
+                "niche": "sports",
+                "sources": [
+                    "https://www.espn.com/espn/rss/news",
+                    "https://rss.cbssports.com/RSS/headlines/news",
+                ],
+            },
+            "night": {
+                "niche": "history",
+                "sources": [
+                    "https://feeds.feedburner.com/britannica-on-this-day",
+                    "https://www.historynet.com/feed",
+                    "https://www.ancient-origins.net/rss.xml",
+                ],
+            },
+        }
+
+    def get_time_slot(self):
+        hour = datetime.datetime.now().hour
+        if 5 <= hour < 12:
+            return "morning"
+        elif 12 <= hour < 17:
+            return "noon"
+        elif 17 <= hour < 21:
+            return "evening"
+        else:
+            return "night"
+
+    def fetch_rss(self, url):
+        print(f"   ⏳ Connecting to: {url}...")
+        try:
+            response = requests.get(url, headers=self.headers, timeout=10)
+            if response.status_code != 200:
+                print(f"      ⚠️ Status {response.status_code}")
+                return []
+
+            feed = feedparser.parse(response.content)
+            if not feed.entries:
+                return []
+            return feed.entries[:10]
+        except Exception as e:
+            print(f"      ❌ Connection Failed: {e}")
+            return []
+
+    def is_boring(self, title):
+        """Filters out boring keywords."""
+        boring = [
+            "crossword",
+            "puzzle",
+            "quiz",
+            "podcast",
+            "review",
+            "roundup",
+            "subscribe",
+            "market snapshot",
         ]
+        return any(x in title.lower() for x in boring)
 
-        all_candidates = []
+    def scrape_targeted_niche(self, forced_slot=None):
+        # Use the forced slot if provided, otherwise check clock
+        slot = forced_slot if forced_slot else self.get_time_slot()
+        config = self.niche_map.get(slot, self.niche_map["noon"])
+        niche = config["niche"]
 
-        for src in sources:
-            try:
-                response = requests.get(src["url"], headers=self.headers, timeout=10)
-                soup = BeautifulSoup(response.content, "xml")
-                items = soup.find_all("item")
+        print(f"🕵️‍♂️ Time: {slot.upper()} | Target Niche: {niche.upper()}")
 
-                count = 0
-                for item in items:
-                    if count >= 6:
-                        break
+        candidates = []
+        for url in config["sources"]:
+            entries = self.fetch_rss(url)
+            for entry in entries:
+                # 🛡️ SAFETY CHECK: Ensure title exists before reading it
+                if not hasattr(entry, "title") or not entry.title:
+                    continue
 
-                    title = item.title.text.strip()
-                    link = item.link.text.strip() if item.link else ""
-                    if not link and item.guid:
-                        link = item.guid.text.strip()
+                if self.is_boring(entry.title):
+                    continue
 
-                    description = ""
-                    if item.description:
-                        description = BeautifulSoup(
-                            item.description.text, "html.parser"
-                        ).get_text()
+                if not self.db.task_exists(entry.title):
+                    candidates.append(
+                        {
+                            "title": entry.title,
+                            "summary": (
+                                entry.summary
+                                if hasattr(entry, "summary")
+                                else entry.title
+                            ),
+                            "niche": niche,
+                        }
+                    )
 
-                    # BASIC KEYWORD FILTER (Immediate Rejection)
-                    risky_words = [
-                        "murder",
-                        "kill",
-                        "dead",
-                        "police",
-                        "arrest",
-                        "court",
-                        "lawsuit",
-                        "prison",
-                        "fbi",
-                        "cia",
-                        "biden",
-                        "trump",
-                        "war",
-                        "weapon",
-                    ]
-                    if any(word in title.lower() for word in risky_words):
-                        continue
-
-                    if not self.task_exists(title):
-                        all_candidates.append(
-                            {
-                                "title": title,
-                                "summary": description,
-                                "content_url": link,
-                                "source": src["name"],
-                            }
-                        )
-                        count += 1
-            except Exception as e:
-                print(f"   ⚠️ Failed {src['name']}: {e}")
-
-        if not all_candidates:
-            print("❌ No safe stories found.")
+        if not candidates:
+            print("❌ No catchy news found in any source.")
             return
 
-        winner = self.pick_viral_news(all_candidates)
+        winner = random.choice(candidates[:3])
+        print(f"🏆 Selected: {winner['title']}")
 
-        if winner:
-            print(f"🏆 SAFE WINNER ({winner['source']}): {winner['title']}")
-
-            print("   📄 Fetching full article...")
-            full_text = self.fetch_full_content(winner["content_url"])
-            final_content = full_text if full_text else winner["summary"]
-
-            self.db.add_task(
-                title=winner["title"],
-                content=final_content,
-                source=winner["source"],
-                status="pending",
-            )
-            print("✅ Task added.")
+        self.db.add_task(
+            title=winner["title"],
+            content=winner["summary"],
+            source=f"{niche.upper()} - RSS",
+            status="pending",
+            extra_data={"niche": niche},
+        )

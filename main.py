@@ -1,47 +1,64 @@
 import asyncio
+import argparse
+from datetime import datetime
 from core.scraper import NewsScraper
 from core.brain import ScriptGenerator
 from core.voice import VoiceEngine
 from core.visuals import VisualScout
 from core.assembler import VideoAssembler
-from datetime import datetime
-
-# Get the current date and time
-start = datetime.now()
-
-# Print only the time in a specific format (HH:MM:SS)
-start_time = start.strftime("%H:%M:%S")
-print("Start Time =", start_time)
+from core.verifier import VideoVerifier  # Don't forget this
+from core.upload_prep import UploadManager  # <--- NEW
 
 
-async def run_pipeline():
-    print("🚀 Starting YouTube Automation Pipeline")
+def get_current_time_slot():
+    hour = datetime.now().hour
+    if 5 <= hour < 12:
+        return "morning"
+    elif 12 <= hour < 17:
+        return "noon"
+    elif 17 <= hour < 21:
+        return "evening"
+    else:
+        return "night"
 
-    # STEP 1: Scrape News (Uncommented so you actually get data)
+
+async def run_pipeline(forced_slot=None):
+    slot = forced_slot if forced_slot else get_current_time_slot()
+    start_datetime = datetime.now()
+    print(
+        f"\n🚀 STARTING PIPELINE | Strategy Mode: {slot.upper()} | Start Time: {start_datetime}"
+    )
+
+    # 1. Scrape
     try:
-        NewsScraper().scrape_top_trends()
+        NewsScraper().scrape_targeted_niche(forced_slot=slot)
     except Exception as e:
-        print(f"⚠️ Scraper warning: {e}")
+        print(f"❌ Scraper Error: {e}")
 
-    # STEP 2: Generate Script + Scene Storyboard
+    # 2. Script & SEO (Updated Brain)
     ScriptGenerator().generate_script()
 
-    # STEP 3: Generate AI Voice
+    # 3. Voice
     await VoiceEngine().generate_audio()
 
-    # STEP 4: Download Scene-Based Visuals
+    # 4. Visuals
     VisualScout().download_visuals()
 
-    # STEP 5: Assemble Final Video
+    # 5. Assemble
     VideoAssembler().assemble()
 
-    print("✅ Pipeline completed successfully")
+    # 6. Verify (Quality Control)
+    VideoVerifier().verify()
 
-    # Get the current date and time
-    start = datetime.now()
-    end_time = start.strftime("%H:%M:%S")
-    print("End Time =", end_time)
+    # 7. Upload Prep (Metadata & Logging)
+    UploadManager().prepare_package()
+
+    end_time = datetime.now()
+    print(f"\n✅ PIPELINE FINISHED | | End Time: {end_time}")
 
 
 if __name__ == "__main__":
-    asyncio.run(run_pipeline())
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--slot", type=str, help="Force: morning, noon, evening, night")
+    args = parser.parse_args()
+    asyncio.run(run_pipeline(forced_slot=args.slot))
