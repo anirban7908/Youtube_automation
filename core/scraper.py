@@ -2,134 +2,107 @@ import requests
 import feedparser
 import random
 import datetime
+import ollama
+import re
 from core.db_manager import DBManager
 
 
 class NewsScraper:
     def __init__(self):
         self.db = DBManager()
-        self.headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        }
+        self.model = "llama3.2:3b"
+        self.headers = {"User-Agent": "Mozilla/5.0"}
 
-        # 🗓️ RELIABLE SOURCES
         self.niche_map = {
             "morning": {
                 "niche": "finance",
                 "sources": [
-                    "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664",  # CNBC Finance
-                    "https://www.investing.com/rss/news.rss",  # Investing.com
-                    "https://feeds.marketwatch.com/marketwatch/topstories/",  # MarketWatch
+                    "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
                 ],
             },
             "noon": {
                 "niche": "tech",
-                "sources": [
-                    "http://feeds.feedburner.com/TechCrunch/",
-                    "https://www.theverge.com/rss/index.xml",
-                ],
+                "sources": ["http://feeds.feedburner.com/TechCrunch/"],
             },
             "evening": {
-                "niche": "sports",
+                "niche": "nature",
                 "sources": [
-                    "https://www.espn.com/espn/rss/news",
-                    "https://rss.cbssports.com/RSS/headlines/news",
+                    "https://www.sciencedaily.com/rss/fossils_ruins/paleontology.xml",
+                    "https://www.sciencedaily.com/rss/plants_animals/endangered_animals.xml",
                 ],
             },
             "night": {
                 "niche": "history",
                 "sources": [
-                    "https://feeds.feedburner.com/britannica-on-this-day",
+                    "https://www.historytoday.com/feed/rss.xml",
                     "https://www.historynet.com/feed",
                     "https://www.ancient-origins.net/rss.xml",
+                    "https://www.archaeology.org/news?format=feed",
+                    "http://feeds.feedburner.com/HeritageDaily",
                 ],
             },
         }
 
     def get_time_slot(self):
-        hour = datetime.datetime.now().hour
-        if 5 <= hour < 12:
+        h = datetime.datetime.now().hour
+        if 5 <= h < 12:
             return "morning"
-        elif 12 <= hour < 17:
+        elif 12 <= h < 17:
             return "noon"
-        elif 17 <= hour < 21:
+        elif 17 <= h < 21:
             return "evening"
         else:
             return "night"
 
     def fetch_rss(self, url):
-        print(f"   ⏳ Connecting to: {url}...")
         try:
-            response = requests.get(url, headers=self.headers, timeout=10)
-            if response.status_code != 200:
-                print(f"      ⚠️ Status {response.status_code}")
-                return []
-
-            feed = feedparser.parse(response.content)
-            if not feed.entries:
-                return []
-            return feed.entries[:10]
-        except Exception as e:
-            print(f"      ❌ Connection Failed: {e}")
-            return []
-
-    def is_boring(self, title):
-        """Filters out boring keywords."""
-        boring = [
-            "crossword",
-            "puzzle",
-            "quiz",
-            "podcast",
-            "review",
-            "roundup",
-            "subscribe",
-            "market snapshot",
-        ]
-        return any(x in title.lower() for x in boring)
+            r = requests.get(url, headers=self.headers, timeout=10)
+            if r.status_code == 200:
+                return feedparser.parse(r.content).entries[
+                    :10
+                ]  # increased to 10 for more variety
+        except:
+            pass
+        return []
 
     def scrape_targeted_niche(self, forced_slot=None):
-        # Use the forced slot if provided, otherwise check clock
         slot = forced_slot if forced_slot else self.get_time_slot()
         config = self.niche_map.get(slot, self.niche_map["noon"])
         niche = config["niche"]
 
-        print(f"🕵️‍♂️ Time: {slot.upper()} | Target Niche: {niche.upper()}")
+        print(f"🕵️‍♂️ Strategy: {slot.upper()} ({niche})")
 
         candidates = []
         for url in config["sources"]:
             entries = self.fetch_rss(url)
-            for entry in entries:
-                # 🛡️ SAFETY CHECK: Ensure title exists before reading it
-                if not hasattr(entry, "title") or not entry.title:
-                    continue
-
-                if self.is_boring(entry.title):
-                    continue
-
-                if not self.db.task_exists(entry.title):
-                    candidates.append(
-                        {
-                            "title": entry.title,
-                            "summary": (
-                                entry.summary
-                                if hasattr(entry, "summary")
-                                else entry.title
-                            ),
-                            "niche": niche,
-                        }
-                    )
+            for e in entries:
+                if hasattr(e, "title"):
+                    # Check DB to see if we already did this one
+                    if not self.db.task_exists(e.title):
+                        candidates.append(
+                            {
+                                "title": e.title,
+                                "summary": getattr(e, "summary", e.title)[:2000],
+                                "niche": niche,
+                            }
+                        )
+                    else:
+                        print(f"      🚫 Skipping known: {e.title[:20]}...")
 
         if not candidates:
-            print("❌ No catchy news found in any source.")
+            print("❌ No new unique tasks found. Try a different slot.")
             return
 
-        winner = random.choice(candidates[:3])
-        print(f"🏆 Selected: {winner['title']}")
+        # 🟢 FORCE VARIETY: Pick Randomly from the top 5 candidates
+        # (Instead of asking AI which always picks the same one)
+        print(f"   🎲 Choosing randomly from {len(candidates)} stories...")
+        winner = random.choice(candidates)
 
-        self.db.add_task(
-            title=winner["title"],
-            content=winner["summary"],
-            source=f"{niche.upper()} - RSS",
-            status="pending",
-            extra_data={"niche": niche},
-        )
+        if winner:
+            self.db.add_task(
+                winner["title"],
+                winner["summary"],
+                f"{niche.upper()}",
+                "pending",
+                {"niche": niche, "niche_slot": slot},
+            )

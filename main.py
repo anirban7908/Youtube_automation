@@ -24,9 +24,9 @@ def get_current_time_slot():
 
 async def run_pipeline(forced_slot=None):
     slot = forced_slot if forced_slot else get_current_time_slot()
-    start_datetime = datetime.now()
+    start_time = datetime.now()
     print(
-        f"\n🚀 STARTING PIPELINE | Strategy Mode: {slot.upper()} | Start Time: {start_datetime}"
+        f"\n🚀 STARTING PIPELINE | Strategy Mode: {slot.upper()} | Start Time: {start_time}"
     )
 
     # 1. Scrape
@@ -55,6 +55,8 @@ async def run_pipeline(forced_slot=None):
 
     end_time = datetime.now()
     print(f"\n✅ PIPELINE FINISHED | | End Time: {end_time}")
+    time_difference = end_time - start_time
+    print(f"\n🚀 Execution Complete! Runtime: {time_difference}")
 
 
 if __name__ == "__main__":
