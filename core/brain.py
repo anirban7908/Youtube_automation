@@ -4,6 +4,7 @@ import ollama
 import time
 from core.db_manager import DBManager
 
+
 class ScriptGenerator:
     def __init__(self):
         self.db = DBManager()
@@ -15,7 +16,7 @@ class ScriptGenerator:
             "finance": "You are a Wall Street Analyst. Tone: Urgent, Insightful. Focus on numbers.",
             "tech": "You are a Tech Reviewer. Tone: Fast-paced, Geeky. Focus on specific specs and tool names.",
             "sports": "You are a Sports Commentator. Tone: High Energy, Loud. Focus on player names and scores.",
-            "history": "You are a Storyteller. Tone: Deep, Cinematic. Focus on dates and specific events."
+            "history": "You are a Storyteller. Tone: Deep, Cinematic. Focus on dates and specific events.",
         }
         return personas.get(niche, personas["tech"])
 
@@ -38,7 +39,7 @@ class ScriptGenerator:
 
     def generate_script(self):
         task = self.db.collection.find_one({"status": "pending"})
-        if not task: 
+        if not task:
             print("📭 No pending tasks to process.")
             return
 
@@ -46,10 +47,10 @@ class ScriptGenerator:
         print("   ⏳ This may take 2-5 minutes on CPU. Please wait...")
 
         system_persona = self.get_persona(task.get("niche", "tech"))
-        
+
         # We feed it the first 2500 chars to ensure it gets all the list items
-        source_content = task.get('content', '')[:2500]
-        
+        source_content = task.get("content", "")[:2500]
+
         # 🟢 PROMPT: FORCES LONG SCRIPT & SPECIFIC DETAILS
         master_prompt = f"""
         {system_persona}
@@ -77,17 +78,17 @@ class ScriptGenerator:
 
         try:
             start_time = time.time()
-            
+
             # Generate
             response = ollama.chat(
-                model=self.model, 
+                model=self.model,
                 format="json",  # Llama 3 supports this natively
-                messages=[{"role": "user", "content": master_prompt}]
+                messages=[{"role": "user", "content": master_prompt}],
             )
-            
+
             duration = time.time() - start_time
             print(f"   ✅ Generation Complete ({duration:.1f}s)")
-            
+
             raw_content = response["message"]["content"]
             data = self.extract_json(raw_content)
 
@@ -96,14 +97,14 @@ class ScriptGenerator:
                 print("      ⚠️ JSON Parse Warning. Using Raw Text Fallback.")
                 data = {
                     "title": task["title"][:50],
-                    "script": raw_content.replace("{", "").replace("}", "")[:1000], 
+                    "script": raw_content.replace("{", "").replace("}", "")[:1000],
                     "description": f"Deep dive into {task['title']}",
                     "tags": "news, education, deep dive",
-                    "hashtags": "#shorts"
+                    "hashtags": "#shorts",
                 }
 
             clean_script = data.get("script", "")
-            
+
             # Safety Check: If script is too short, extend it
             if len(clean_script.split()) < 60:
                 print("      ⚠️ Script was too short. Extending outro...")
@@ -112,8 +113,10 @@ class ScriptGenerator:
             # 2. Generate Visual Scenes (8 Scenes for longer video)
             print("   🎨 Brainstorming 8 Visual Scenes...")
             scene_prompt = f"Create 8 distinct, highly detailed visual image prompts to match this script: {clean_script[:500]}"
-            res_scenes = ollama.chat(model=self.model, messages=[{"role": "user", "content": scene_prompt}])
-            
+            res_scenes = ollama.chat(
+                model=self.model, messages=[{"role": "user", "content": scene_prompt}]
+            )
+
             final_scenes = []
             for line in res_scenes["message"]["content"].splitlines():
                 if len(line) > 10 and not "Here" in line:
@@ -123,15 +126,17 @@ class ScriptGenerator:
             # 3. Save to DB
             self.db.collection.update_one(
                 {"_id": task["_id"]},
-                {"$set": {
-                    "script": clean_script,
-                    "title": data.get("title", task["title"]),
-                    "description": data.get("description", ""),
-                    "tags": data.get("tags", ""),
-                    "hashtags": data.get("hashtags", ""),
-                    "scenes": final_scenes[:8], # Limit to 8
-                    "status": "scripted"
-                }}
+                {
+                    "$set": {
+                        "script": clean_script,
+                        "title": data.get("title", task["title"]),
+                        "description": data.get("description", ""),
+                        "tags": data.get("tags", ""),
+                        "hashtags": data.get("hashtags", ""),
+                        "scenes": final_scenes[:8],  # Limit to 8
+                        "status": "scripted",
+                    }
+                },
             )
             print(f"✅ Success! Title: {data.get('title')}")
 

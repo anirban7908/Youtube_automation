@@ -7,3 +7,4 @@ data/videos
 backup
 __pycache__/
 core/__pycache__/
+logs/
