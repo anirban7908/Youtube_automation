@@ -15,20 +15,33 @@ class NewsScraper:
 
         self.niche_map = {
             "morning": {
-                "niche": "finance",
+                "niche": "motivation",
                 "sources": [
-                    "https://search.cnbc.com/rs/search/combinedcms/view.xml?partnerId=wrss01&id=10000664"
+                    "https://tinybuddha.com/feed/",
+                    "https://dailystoic.com/feed/",
+                    "https://zenhabits.net/feed/",
+                    "https://www.marcandangel.com/feed/",
+                    "https://www.pickthebrain.com/blog/feed/",
                 ],
             },
             "noon": {
                 "niche": "tech",
-                "sources": ["http://feeds.feedburner.com/TechCrunch/"],
+                "sources": [
+                    "http://feeds.feedburner.com/TechCrunch/",
+                    "https://www.theverge.com/rss/index.xml",
+                    "https://www.wired.com/feed/rss",
+                    "https://gizmodo.com/rss",
+                ],
             },
             "evening": {
                 "niche": "nature",
                 "sources": [
                     "https://www.sciencedaily.com/rss/fossils_ruins/paleontology.xml",
                     "https://www.sciencedaily.com/rss/plants_animals/endangered_animals.xml",
+                    "https://news.mongabay.com/feed/",
+                    "https://www.smithsonianmag.com/rss/science-nature/",
+                    "https://www.earth.com/feed/",
+                    "https://phys.org/rss-feed/biology-news/ecology/",
                 ],
             },
             "night": {
