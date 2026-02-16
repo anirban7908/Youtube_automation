@@ -1,8 +1,9 @@
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 from pymongo import MongoClient
 from dotenv import load_dotenv
+import difflib  # 🟢 NEW: For fuzzy text comparison
 
 load_dotenv()
 
@@ -33,37 +34,55 @@ class DBManager:
         os.makedirs(full_path, exist_ok=True)
         return full_path
 
-    # 🟢 IMPROVED DUPLICATE CHECKER
-    def task_exists(self, title):
+    # 🟢 NEW STRATEGY: 7-DAY WINDOW + FUZZY MATCH
+    def task_exists(self, new_title):
         """
-        Normalizes titles to ensure 'The Dinosaur' and 'the dinosaur ' are treated as duplicates.
+        Checks if a similar video was created in the last 7 days.
+        Returns True if >85% similar.
         """
-        # 1. Check exact match first
-        if self.collection.find_one({"title": title}):
+        # 1. Exact Match (Fastest check)
+        if self.collection.find_one({"title": new_title}):
             return True
 
-        # 2. Check normalized match (remove spaces, lowercase)
-        clean_title = re.sub(r"\W+", "", title).lower()
+        # 2. Time Window Filter (Optimization)
+        # Only fetch tasks created in the last 7 days.
+        # This keeps the list small (e.g., 20 items instead of 100,000).
+        cutoff_date = datetime.utcnow() - timedelta(days=7)
 
-        # We have to scan (inefficient but safe for small DBs) or rely on the previous check
-        # For now, let's trust the Regex 'i' option but make it safer
-        try:
-            regex = f"^{re.escape(title)}$"
-            return (
-                self.collection.find_one({"title": {"$regex": regex, "$options": "i"}})
-                is not None
-            )
-        except:
-            return False
+        recent_tasks = self.collection.find(
+            {"created_at": {"$gte": cutoff_date}}, {"title": 1}
+        )
+
+        # 3. Fuzzy Logic Check
+        # Compare the new title against the small list of recent titles.
+        for task in recent_tasks:
+            existing_title = task.get("title", "")
+
+            # Calculate similarity ratio (0.0 to 1.0)
+            similarity = difflib.SequenceMatcher(
+                None, new_title.lower(), existing_title.lower()
+            ).ratio()
+
+            # Threshold: 85% similar
+            # Example: "Apple iPhone 16" vs "Apple releases iPhone 16" matches.
+            if similarity > 0.85:
+                print(
+                    f"      🚫 Duplicate Found ({int(similarity*100)}% match): '{new_title}' ≈ '{existing_title}'"
+                )
+                return True
+
+        return False
 
     def add_task(
         self, title, content, source="manual", status="pending", extra_data=None
     ):
+        # The check happens here before insertion
         if self.task_exists(title):
             print(f"      🚫 DB: Skipping Duplicate '{title[:20]}...'")
             return
 
-        slot = extra_data.get("niche_slot", "noon")
+        slot = extra_data.get("niche_slot", "morning")
+        source_url = extra_data.get("source_url", "https://news.google.com/")
         folder_path = self.get_video_folder(slot, title)
 
         task = {
@@ -71,7 +90,8 @@ class DBManager:
             "content": content,
             "source": source,
             "status": status,
-            "niche": extra_data.get("niche", "tech"),
+            "source_url": source_url,
+            "niche": extra_data.get("niche", "motivation"),
             "slot": slot,
             "folder_path": folder_path,
             "created_at": datetime.utcnow(),

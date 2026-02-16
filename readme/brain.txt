@@ -1,0 +1,46 @@
+File: brain.py
+
+1. What it does?
+This file is the "Creative Director" and "Scriptwriter" of your automation pipeline. It takes the raw, unstructured news stories found by the scraper and uses Artificial Intelligence (AI) to transform them into professional, viral-ready video scripts. It breaks the story into scenes, writes the narration, decides on visual keywords for stock footage, and ensures every video ends with a strong Call to Action (CTA).
+
+2. What are the libraries used?
+Here are the libraries imported in this file and why they are used:
+
+* json
+  - Definition: A built-in Python library for parsing and generating JSON (JavaScript Object Notation) data.
+  - Why used here?: The AI (Ollama) is asked to return the script in a strict JSON format. This library converts that text response into a usable Python dictionary so the code can access fields like `scenes` and `keywords`.
+
+* re (Regular Expressions)
+  - Definition: A powerful tool for matching and manipulating patterns in text.
+  - Why used here?: AI models sometimes "chat" before giving the data (e.g., "Here is your JSON: { ... }"). The `repair_json` function uses regex to strip away this extra chatter and extract only the valid JSON code block to prevent errors.
+
+* ollama
+  - Definition: The Python client library for interacting with your local Ollama instance.
+  - Why used here?: It sends the raw news content and the "Documentary Director" prompt to your local Llama 3 model to generate the actual script.
+
+* core.db_manager.DBManager
+  - Definition: Your custom class that handles database connections.
+  - Why used here?: It is used to fetch tasks that are waiting in the "pending" state and, once the script is generated, update them to the "scripted" state so the next step (Voice Engine) knows they are ready.
+
+3. Which is the main function and what does it do?
+
+Main Function: generate_script(self)
+
+Description:
+This is the core logic that produces the video blueprint.
+1. Fetching: It looks in the database for a task where `statu
+s: "pending"`.
+2. Prompting: It constructs a detailed prompt acting as a "Documentary Director," feeding the raw news text to the AI.
+3. Generating: It calls `ollama.chat` to generate a structured JSON response containing the video title, distinct scenes, narration text, and search keywords for images.
+4. Cleaning: It uses `repair_json` to ensure the AI's output is valid code.
+5. Saving: It updates the database record with the new script data and changes the status to "scripted".
+
+Helper Functions & Components Discussion:
+
+* repair_json(self, json_str)
+  - Purpose: A safety mechanism to fix broken or messy AI output.
+  - How it works: It uses regex (`re.sub`) to remove any text *before* the first `{` and *after* the last `}`, ensuring only the pure JSON object remains. This prevents the script from crashing if the AI says "Sure! Here is the code..."
+
+* prompt (variable)
+  - Purpose: The instruction manual for the AI.
+  - Why?: It explicitly tells the AI to create 6-8 scenes, include specific keywords for stock photos, decide on image counts (fast vs. slow pacing), and mandate a "Call to Action" at the end. This ensures every video follows a consistent, viral structure.

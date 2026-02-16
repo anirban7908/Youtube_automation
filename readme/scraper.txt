@@ -1,0 +1,79 @@
+File: scraper.py
+
+1. What it does?
+This file is the "Content Hunter" of your automation pipeline. Its job is to go out to the internet, find fresh news articles based on the current time of day (e.g., "Tech" at noon, "Nature" in the evening), and save them into your database.
+
+Key Upgrade: Instead of just picking a random story, it now uses Artificial Intelligence (AI) to analyze all found headlines and select the one with the highest potential to go viral. It also includes a safety net: if the AI fails, it automatically falls back to a random selection to ensure the system never stops.
+
+2. What are the libraries used?
+Here are the libraries imported in this file and why they are used:
+
+* requests
+  - Definition: The standard Python library for sending HTTP requests (like a web browser does).
+  - Why used here?: It is used inside `fetch_rss` to actually download the raw data (XML files) from the news websites (e.g., TechCrunch, ScienceDaily).
+
+* feedparser
+  - Definition: A specialized library for parsing RSS and Atom feeds.
+  - Why used here?: Raw news data comes in XML format, which is hard to read. `feedparser` takes that messy XML and turns it into a clean Python list of articles with properties like `.title` and `.summary`.
+
+* random
+  - Definition: A Python module for generating random numbers or making random selections.
+  - Why used here?: It acts as the "Safety Net". If the AI fails to pick a winner (or crashes), `random.choice` takes over to ensure a video is still created.
+
+* datetime
+  - Definition: A module for manipulating dates and times.
+  - Why used here?: It is used in `get_time_slot` to check the current hour (e.g., 2 PM) so the bot knows whether to look for "Tech" news or "Nature" news.
+
+* ollama
+  - Definition: A library to interact with local Large Language Models (like Llama 3).
+  - Why used here?: This is the "Brain of the Judge". It sends the list of headlines to your local AI model and asks it to pick the most "viral" one based on shock value and curiosity.
+
+* re (Regular Expressions)
+  - Definition: A powerful tool for matching patterns in text.
+  - Why used here?: It is used to extract the specific number (index) from the AI's text response (e.g., extracting "3" from "I choose headline number 3").
+
+* core.db_manager.DBManager
+  - Definition: Your custom class that handles database connections.
+  - Why used here?: The scraper needs this to save the new tasks (`add_task`) and, crucially, to check if a story was already done (`task_exists`) so you don't make duplicate videos.
+
+3. Which is the main function and what does it do?
+
+Main Function: scrape_targeted_niche(self, forced_slot=None)
+
+Description:
+This is the "Brain" of the scraper. It orchestrates the entire process of finding news.
+1. Strategy Selection: It calls `get_time_slot` (or uses `forced_slot`) to decide the topic (e.g., "tech").
+2. Gathering: It loops through every URL defined in `niche_map` and calls `fetch_rss` to get articles.
+3. Filtering: It checks every single article against the database (`self.db.task_exists`). If the video already exists (checked via the new 7-day fuzzy match), it skips it.
+4. Selection (The Judge): It calls `pick_viral_topic` to let AI choose the best story.
+5. Saving: It saves the winner to the database with the status "pending", ready for the Script Generator to take over.
+
+Helper Functions & Components Discussion:
+
+* pick_viral_topic(self, candidates, niche) (NEW)
+  - Purpose: The AI Logic that replaces pure randomness.
+  - How it works:
+    1. Formats the list of headlines into a numbered list (1. Headline A, 2. Headline B...).
+    2. Sends a prompt to Ollama: "Pick the most VIRAL YouTube Short headline..."
+    3. Uses Regex (`re`) to find the number in the AI's answer.
+    4. Fallback: If the AI errors out or returns no number, it prints a warning and returns `random.choice(candidates)` instead.
+
+* headers = {"User-Agent": "Mozilla/5.0"}
+  - Purpose: This pretends to be a real web browser (Mozilla Firefox/Chrome).
+  - Why?: Many news sites block automated bots (Python scripts). By sending this header, you "trick" the site into thinking a human is visiting, so they don't block your connection.
+
+* niche_map
+  - Purpose: A configuration dictionary that acts as a schedule.
+  - Why?: It maps time slots (morning, noon, evening, night) to specific topics and their corresponding RSS feed URLs.
+
+* get_time_slot(self)
+  - Purpose: Returns a string ("morning", "noon", etc.) based on the current hour.
+  - Why?: It allows the bot to be dynamic. If you run it at 8 AM, it gets motivation news. If you run it at 8 PM, it gets history news.
+
+* fetch_rss(self, url)
+  - Purpose: Downloads and parses a single RSS feed.
+  - How it works:
+    1. It uses `requests.get(url)` to grab the data.
+    2. It checks if the request was successful (`status_code == 200`).
+    3. It passes the content to `feedparser.parse()`.
+    4. It returns the top 10 entries (articles) found in that feed.

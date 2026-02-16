@@ -1,0 +1,46 @@
+File: upload_prep.py
+
+1. What it does?
+This file is the "Logistics Manager" or "Packager." Once a video passes the quality check, this script prepares it for delivery to YouTube. It creates a complete "Upload Package" so you don't have to hunt for information.
+
+It generates a structured text file right next to your video containing the **Title**, **Description**, **Tags**, and **Hashtags**. It also keeps a permanent log file (`logs/upload_history.log`) of every video successfully packaged.
+
+2. What are the libraries used?
+Here are the libraries imported in this file and why they are used:
+
+* os
+  - Definition: Operating System interface.
+  - Why used here?: Critical for file management. It finds the video path, creates the logs directory, and writes the metadata text file (`_METADATA.txt`) in the same folder as the video.
+
+* datetime
+  - Definition: Date and time module.
+  - Why used here?: Used to generate timestamps for the log file (e.g., `[2026-02-16 14:30:00] Success...`), creating a permanent history of your uploads.
+
+* core.db_manager.DBManager
+  - Definition: Database handler.
+  - Why used here?: Fetches tasks with status "ready_to_upload" and, after packaging, updates them to "completed_packaged".
+
+3. Which is the main function and what does it do?
+
+Main Function: prepare_package(self)
+
+Description:
+This function bundles the final assets.
+1. Fetching: It looks for a task where `status: "ready_to_upload"`.
+2. Validation: It checks if the `.mp4` file actually exists on the disk.
+3. Metadata Creation:
+   - It creates a new text file with the same name as the video (e.g., `video.mp4` -> `video_METADATA.txt`).
+   - It writes a formatted string containing the video's Title, Description, Tags, and Hashtags (pulled from the DB).
+4. Logging: It calls `log_status` to write a "Success" entry into the log file.
+5. Completion: It updates the database status to `completed_packaged`.
+
+Helper Functions & Components Discussion:
+
+* log_status(self, task_title, status, message)
+  - Purpose: The Record Keeper.
+  - How it works: It appends a line to `logs/upload_history.log` with the current timestamp, status (SUCCESS/ERROR), and details.
+  - Why?: If something goes wrong (e.g., a file is missing), you can check this log file days later to see exactly what happened and when.
+
+* seo_content (Variable)
+  - Purpose: The Template.
+  - Why?: This is a formatted string that organizes the YouTube metadata into a readable layout. When you open the text file, you can simply copy-paste the sections directly into YouTube Studio.

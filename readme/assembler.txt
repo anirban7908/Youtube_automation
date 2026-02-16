@@ -1,0 +1,78 @@
+File: assembler.py
+
+1. What it does?
+This file is the "Post-Production Studio" of your automation pipeline. It acts as the Video Editor. It takes the separate audio files (from the Voice Engine) and the images (from the Visual Scout) and combines them into a single, seamless video.
+
+It applies professional editing techniques:
+* **Synchronization:** Ensures images change exactly when the scene ends.
+* **Ken Burns Effect:** Adds a slow, cinematic zoom to static images so the video feels alive.
+* **Formatting:** Crops everything to vertical 9:16 format (1080x1920) for YouTube Shorts/TikTok.
+* **AI Captioning:** Uses OpenAI's Whisper model to listen to the final audio and generate word-by-word "Karaoke style" subtitles that pop up exactly when the word is spoken.
+
+2. What are the libraries used?
+Here are the libraries imported in this file and why they are used:
+
+* moviepy (The Video Engine)
+    * Definition: A powerful library for video editing in Python.
+    * Why used here?: It handles the heavy lifting: loading images, resizing, cropping, adding audio, and rendering the final `.mp4` file. It allows us to treat video clips like code objects that can be added or multiplied.
+    * Key Modules used:
+        * `AudioFileClip`: Handles the MP3 voiceover.
+        * `ImageClip`: Turns a static JPG into a video clip with a duration.
+        * `TextClip`: Generates the yellow subtitle text.
+        * `CompositeVideoClip`: Layers the text on top of the video.
+        * `concatenate_videoclips`: Glues scene 1, scene 2, and scene 3 together.
+
+* whisper (The Ears)
+    * Definition: OpenAI's state-of-the-art speech recognition model.
+    * Why used here?: Standard subtitle tools only give you whole sentences. Whisper gives us **word-level timestamps** (e.g., "Hello" starts at 0.5s and ends at 0.9s). This allows us to create dynamic, fast-paced captions.
+
+* core.db_manager.DBManager
+    * Definition: Your custom database handler.
+    * Why used here?: Fetches tasks with the status "ready_to_assemble" and marks them as "completed" once the video is rendered.
+
+3. Which is the main function and what does it do?
+
+Main Function: assemble(self)
+
+Description:
+This function builds the video layer by layer.
+
+Step A: The Scene Loop (Building the Timeline)
+It loops through every scene defined in the script.
+1.  **Audio Loading:** It loads the voiceover for the scene to determine the exact duration (e.g., 5.0 seconds).
+2.  **Visual Pacing Math:** It calculates how long each image should appear.
+    * Formula: `Image Duration = Scene Audio Duration / Number of Images`.
+    * Example: If the voiceover is 6 seconds and you have 2 images, each image gets exactly 3 seconds.
+
+Step B: Visual Processing (The "Ken Burns" & Crop Math)
+For every image, it applies two critical transformations:
+1.  **The Zoom Effect (Math Explained):**
+    * Code: `vfx.Resize(lambda t: 1 + 0.04 * t)`
+    * Algorithm: This is a function of time (`t`).
+        * At `t=0` (start), size is `1 + 0` = **100%** (Original size).
+        * At `t=5` (end), size is `1 + (0.04 * 5)` = **120%** (Zoomed in).
+    * Result: The image slowly grows larger, creating movement from stillness.
+    
+2.  **The 9:16 Crop (Aspect Ratio Logic):**
+    * Code: `clip.cropped(x_center=clip.w / 2, y_center=clip.h / 2, width=1080, height=1920)`
+    * Algorithm:
+        * First, it resizes the image so it is at least 1920 pixels tall.
+        * Then, it finds the exact center pixel of the image.
+        * Finally, it draws a 1080x1920 box around that center and discards the rest.
+    * Result: Your landscape stock photos perfectly fill a mobile phone screen without stretching.
+
+Step C: Subtitle Generation (The Whisper Logic)
+Once the video scenes are glued together (`full_video`), the code generates captions.
+1.  **Transcription:** `self.model.transcribe(audio, word_timestamps=True)`
+    * This is the magic step. It listens to the audio and returns a list of every single word with its precise start and end time.
+2.  **Text Object Creation:**
+    * It loops through every word.
+    * It creates a `TextClip` for that specific word.
+    * **The "Cutoff" Fix:**
+        * Code: `margin=(20, 15)`
+        * Why?: Standard text boxes are tight. This adds 20px horizontal and 15px vertical padding (empty space) inside the black box. This ensures the bottom of letters like 'g' or 'y' are not sliced off.
+    * **Positioning:** `("center", 1300)` places the text slightly below the middle of the screen, the standard position for Short-form content.
+
+Step D: Final Rendering
+* It stacks the `full_video` (background) and `caption_clips` (foreground) using `CompositeVideoClip`.
+* It writes the file using `libx264` (a standard video compression codec) to `FINAL_VIDEO.mp4`.

@@ -25,12 +25,12 @@ class NewsScraper:
                 ],
             },
             "noon": {
-                "niche": "tech",
+                "niche": "space",
                 "sources": [
-                    "http://feeds.feedburner.com/TechCrunch/",
-                    "https://www.theverge.com/rss/index.xml",
-                    "https://www.wired.com/feed/rss",
-                    "https://gizmodo.com/rss",
+                    "https://www.space.com/feeds/news",
+                    "https://www.sciencedaily.com/rss/space_time.xml",
+                    "https://www.nasa.gov/rss/dyn/breaking_news.rss",
+                    "https://universetoday.com/feed",
                 ],
             },
             "evening": {
@@ -78,6 +78,57 @@ class NewsScraper:
             pass
         return []
 
+    # 🟢 NEW: AI VIRAL JUDGE
+    def pick_viral_topic(self, candidates, niche):
+        """
+        Uses Ollama to analyze titles and pick the most click-worthy one.
+        """
+        # Create a numbered list for the AI to read
+        titles = [f"{i}. {c['title']}" for i, c in enumerate(candidates)]
+        titles_text = "\n".join(titles)
+
+        prompt = f"""
+        TASK: You are a YouTube Viral Content Strategist.
+        GOAL: Pick the ONE headline from the list below that has the highest potential to go VIRAL as a YouTube Short.
+        NICHE: {niche}
+        
+        CRITERIA:
+        1. Look for shock value, curiosity gaps, or major breakthroughs.
+        2. Avoid boring, generic, or corporate announcements.
+        
+        HEADLINES:
+        {titles_text}
+        
+        OUTPUT FORMAT: Return ONLY the index number (integer) of the best headline. Example: 5
+        """
+
+        try:
+            print(
+                f"   🤖 AI Judge: Analyzing {len(candidates)} headlines for virality..."
+            )
+            response = ollama.chat(
+                model=self.model, messages=[{"role": "user", "content": prompt}]
+            )
+
+            # Extract the number from the response (e.g., "The best is 3" -> 3)
+            content = response["message"]["content"].strip()
+            match = re.search(r"\d+", content)
+
+            if match:
+                index = int(match.group())
+                if 0 <= index < len(candidates):
+                    print(
+                        f"      🏆 AI Selected: '{candidates[index]['title'][:40]}...'"
+                    )
+                    return candidates[index]
+
+            print("      ⚠️ AI failed to return a valid number. Picking random.")
+            return random.choice(candidates)
+
+        except Exception as e:
+            print(f"      ❌ AI Error: {e}. Fallback to random.")
+            return random.choice(candidates)
+
     def scrape_targeted_niche(self, forced_slot=None):
         slot = forced_slot if forced_slot else self.get_time_slot()
         config = self.niche_map.get(slot, self.niche_map["noon"])
@@ -90,32 +141,31 @@ class NewsScraper:
             entries = self.fetch_rss(url)
             for e in entries:
                 if hasattr(e, "title"):
-                    # Check DB to see if we already did this one
+                    # The DB Manager now handles the 7-day fuzzy check
                     if not self.db.task_exists(e.title):
                         candidates.append(
                             {
                                 "title": e.title,
-                                "summary": getattr(e, "summary", e.title)[:2000],
+                                "summary": getattr(e, "summary", e.title)[:3000],
+                                "link": getattr(e, "link", ""),
                                 "niche": niche,
                             }
                         )
-                    else:
-                        print(f"      🚫 Skipping known: {e.title[:20]}...")
 
         if not candidates:
             print("❌ No new unique tasks found. Try a different slot.")
             return
 
-        # 🟢 FORCE VARIETY: Pick Randomly from the top 5 candidates
-        # (Instead of asking AI which always picks the same one)
-        print(f"   🎲 Choosing randomly from {len(candidates)} stories...")
-        winner = random.choice(candidates)
+        # 🟢 SMART SELECTION (AI JUDGE)
+        if len(candidates) > 0:
+            # print({"candidates": candidates})
+            winner = self.pick_viral_topic(candidates, niche)
 
-        if winner:
-            self.db.add_task(
-                winner["title"],
-                winner["summary"],
-                f"{niche.upper()}",
-                "pending",
-                {"niche": niche, "niche_slot": slot},
-            )
+            if winner:
+                self.db.add_task(
+                    winner["title"],
+                    winner["summary"],
+                    f"{niche.upper()}",
+                    "pending",
+                    {"niche": niche, "niche_slot": slot, "source_url": winner["link"]},
+                )

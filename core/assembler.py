@@ -87,11 +87,11 @@ class VideoAssembler:
                     TextClip(
                         text=word["word"].strip().upper(),
                         font=FONT_PATH,
-                        font_size=85,  # Increased size slightly for readability
+                        font_size=75,  # Increased size slightly for readability
                         color="yellow",
                         stroke_color="black",
                         stroke_width=4,
-                        bg_color="#00000099",  # Semi-transparent black box container
+                        # bg_color="#373636FF",  # Semi-transparent black box container
                         method="caption",
                         size=(1000, None),
                         margin=(
@@ -102,7 +102,7 @@ class VideoAssembler:
                     .with_start(word["start"])
                     .with_duration(word["end"] - word["start"])
                     .with_position(
-                        ("center", 1300)
+                        ("center", 1600)
                     )  # Moved slightly lower to look better
                 )
                 caption_clips.append(txt)
