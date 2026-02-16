@@ -5,3 +5,5 @@ backup
 __pycache__/
 core/__pycache__/
 logs/
+*.mp4
+*.jpg

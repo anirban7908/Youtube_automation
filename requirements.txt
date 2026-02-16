@@ -1,11 +1,41 @@
+# Database & Env
+pymongo
+python-dotenv
+
+# Networking & Scraping
+requests
+feedparser
+
+# AI & Logic
+ollama
+openai-whisper
+numpy
+
+# Audio & Voice
+edge-tts
+mutagen
+
+# Image & Video Processing
+moviepy
+pillow
+opencv-python
+scikit-image# --- Core & Database ---
 pymongo
 python-dotenv
 requests
-beautifulsoup4
+
+# --- Content Gathering ---
+feedparser
 ollama
+
+# --- Audio & Speech ---
 edge-tts
+mutagen
+openai-whisper
+
+# --- Video & Image Processing ---
 moviepy
 pillow
-fastapi
-uvicorn
-streamlit
+opencv-python
+scikit-image
+numpy
