@@ -7,4 +7,7 @@ core/__pycache__/
 core/client_secrets.json
 logs/
 *.mp4
-*.jpgcore/client_secrets.json
+*.jpg
+core/client_secrets.json
+client_secrets.json
+*.pickle

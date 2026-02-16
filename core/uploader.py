@@ -11,24 +11,30 @@ from core.db_manager import DBManager
 class YouTubeUploader:
     def __init__(self):
         self.db = DBManager()
-        # This scope allows us to Manage (Upload/Edit) your YouTube videos
         self.SCOPES = ["https://www.googleapis.com/auth/youtube.upload"]
         self.api_service_name = "youtube"
         self.api_version = "v3"
         self.client_secrets_file = "client_secrets.json"
-        self.token_file = "token.pickle"  # Stores your login session
-
+        self.token_file = "token.pickle"
         self.youtube = self.get_authenticated_service()
 
+        # 🟢 NEW: Map your 'niche' to YouTube Category IDs
+        # Reference: https://gist.github.com/dgp/1b24bf2961521bd75d6c
+        self.CATEGORY_MAP = {
+            "motivation": "22",  # People & Blogs (Best for lifestyle/motivation)
+            "tech": "28",  # Science & Technology
+            "space": "28",  # Science & Technology
+            "nature": "15",  # Pets & Animals (Best for wildlife/nature)
+            "history": "27",  # Education (Best for history/facts)
+            "general": "24",  # Entertainment (Fallback)
+        }
+
     def get_authenticated_service(self):
-        """Handles the OAuth2 Login flow seamlessly."""
         creds = None
-        # 1. Check if we have a saved login token
         if os.path.exists(self.token_file):
             with open(self.token_file, "rb") as token:
                 creds = pickle.load(token)
 
-        # 2. If no valid login, open browser to log in
         if not creds or not creds.valid:
             if creds and creds.expired and creds.refresh_token:
                 creds.refresh(Request())
@@ -36,19 +42,18 @@ class YouTubeUploader:
                 flow = InstalledAppFlow.from_client_secrets_file(
                     self.client_secrets_file, self.SCOPES
                 )
-                # Opens a local web server to catch the login response
                 creds = flow.run_local_server(port=0)
 
-            # 3. Save the login for next time
             with open(self.token_file, "wb") as token:
                 pickle.dump(creds, token)
 
         return build(self.api_service_name, self.api_version, credentials=creds)
 
     def upload_video(self):
-        # 1. Find a video that is packaged and ready
-        task = self.db.collection.find_one({"status": "completed_packaged"})
-
+        # task = self.db.collection.find_one({"status": "completed_packaged"})
+        task = self.db.collection.find_one(
+            {"status": "completed_packaged"}, sort=[("created_at", -1)]
+        )
         if not task:
             print("📭 No packaged videos found to upload.")
             return
@@ -60,23 +65,24 @@ class YouTubeUploader:
             print("❌ Error: Video file not found on disk.")
             return
 
-        # 2. Prepare Metadata (Title, Description, Tags)
-        # Category ID 28 = Science & Technology
+        # 🟢 DYNAMIC CATEGORY LOGIC
+        # Get niche from DB, default to 'general' if missing
+        niche = task.get("niche", "general").lower()
+        # Look up the ID, default to '22' (People & Blogs) if niche not found
+        category_id = self.CATEGORY_MAP.get(niche, "22")
+
+        print(f"   🏷️ Niche: {niche} -> YouTube Category ID: {category_id}")
+
         request_body = {
             "snippet": {
-                "categoryId": "28",
-                "title": task["title"][:100],  # YouTube limit is 100 chars
+                "categoryId": category_id,  # <--- NOW DYNAMIC
+                "title": task["title"][:100],
                 "description": f"{task['content'][:4000]}\n\n#Shorts\n\nSource: {task.get('source_url', '')}",
-                "tags": task.get("tags", "").split(",") + ["Shorts", "AI", "Tech"],
+                "tags": task.get("tags", "").split(",") + ["Shorts", niche],
             },
-            "status": {
-                # ⚠️ 'private' is safest for testing. Change to 'public' when confident.
-                "privacyStatus": "private",
-                "selfDeclaredMadeForKids": False,
-            },
+            "status": {"privacyStatus": "private", "selfDeclaredMadeForKids": False},
         }
 
-        # 3. Upload File
         media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
 
         request = self.youtube.videos().insert(
@@ -84,20 +90,17 @@ class YouTubeUploader:
         )
 
         try:
-            print("   ⏳ Uploading... (This may take a minute)")
+            print("   ⏳ Uploading...")
             response = None
             while response is None:
                 status, response = request.next_chunk()
                 if status:
                     print(f"      Uploaded {int(status.progress() * 100)}%")
 
-            # 4. Success Handling
             if "id" in response:
                 video_id = response["id"]
                 print(f"   ✅ Upload Successful! Video ID: {video_id}")
-                print(f"   🔗 Link: https://youtu.be/{video_id}")
 
-                # 5. Update Database with the new YouTube ID
                 self.db.collection.update_one(
                     {"_id": task["_id"]},
                     {
@@ -109,7 +112,7 @@ class YouTubeUploader:
                     },
                 )
             else:
-                print(f"   ❌ Upload failed with unexpected response: {response}")
+                print(f"   ❌ Upload failed: {response}")
 
         except Exception as e:
             print(f"   ❌ API Error: {e}")
