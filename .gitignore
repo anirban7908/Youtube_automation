@@ -4,6 +4,7 @@ data/
 backup
 __pycache__/
 core/__pycache__/
+core/client_secrets.json
 logs/
 *.mp4
-*.jpg
+*.jpgcore/client_secrets.json
