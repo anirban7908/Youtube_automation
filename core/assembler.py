@@ -115,6 +115,6 @@ class VideoAssembler:
 
         self.db.collection.update_one(
             {"_id": task["_id"]},
-            {"$set": {"status": "completed", "final_video_path": out_path}},
+            {"$set": {"status": "ready_to_upload", "final_video_path": out_path}},
         )
         print(f"🎉 Synchronized Video Ready: {out_path}")

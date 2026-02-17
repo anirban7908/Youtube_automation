@@ -1,66 +1,98 @@
+import sys
 import asyncio
 import argparse
-from datetime import datetime
+import json
+import os
+import datetime
 from core.scraper import NewsScraper
 from core.brain import ScriptGenerator
 from core.voice import VoiceEngine
 from core.visuals import VisualScout
 from core.assembler import VideoAssembler
-from core.verifier import VideoVerifier  # Don't forget this
-from core.upload_prep import UploadManager  # <--- NEW
+from core.upload_prep import UploadManager
+from core.db_manager import DBManager  # 🟢 Added this to fetch video details
 
 
-def get_current_time_slot():
-    hour = datetime.now().hour
-    if 5 <= hour < 12:
-        return "morning"
-    elif 12 <= hour < 17:
-        return "noon"
-    elif 17 <= hour < 21:
-        return "evening"
-    else:
-        return "night"
+def run_creation_pipeline(slot_name):
+    print(f"\n🎬 STARTING PRODUCTION PIPELINE: {slot_name.upper()}")
 
+    # 1. SCRAPER
+    print("---------------------------------------")
+    scraper = NewsScraper()
+    scraper.scrape_targeted_niche(forced_slot=slot_name)
 
-async def run_pipeline(forced_slot=None):
-    slot = forced_slot if forced_slot else get_current_time_slot()
-    start_time = datetime.now()
-    print(
-        f"\n🚀 STARTING PIPELINE | Strategy Mode: {slot.upper()} | Start Time: {start_time}"
+    # 2. BRAIN (Scripting)
+    print("---------------------------------------")
+    brain = ScriptGenerator()
+    brain.generate_script()
+
+    # 3. VOICE (Async)
+    print("---------------------------------------")
+    voice = VoiceEngine()
+    asyncio.run(voice.generate_audio())
+
+    # 4. VISUALS
+    print("---------------------------------------")
+    visuals = VisualScout()
+    visuals.download_visuals()
+
+    # 5. ASSEMBLER
+    print("---------------------------------------")
+    assembler = VideoAssembler()
+    assembler.assemble()
+
+    # 6. UPLOAD PREP
+    print("---------------------------------------")
+    prep = UploadManager()
+    prep.prepare_package()
+
+    # 🟢 7. JSON LOGGING (New Feature)
+    print("---------------------------------------")
+    print("📝 Logging details to JSON...")
+
+    db = DBManager()
+    # Fetch the most recent video that was just packaged
+    latest_task = db.collection.find_one(
+        {"status": "completed_packaged"}, sort=[("created_at", -1)]
     )
 
-    # 1. Scrape
-    try:
-        NewsScraper().scrape_targeted_niche(forced_slot=slot)
-    except Exception as e:
-        print(f"❌ Scraper Error: {e}")
+    if latest_task:
+        log_entry = {
+            "video_name": latest_task.get("title"),
+            "description": latest_task.get("ai_description"),
+            "time_slot": slot_name,
+            "generated_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
 
-    # 2. Script & SEO (Updated Brain)
-    ScriptGenerator().generate_script()
+        log_file = "production_log.json"
 
-    # 3. Voice
-    await VoiceEngine().generate_audio()
+        # Read existing logs or create empty list
+        if os.path.exists(log_file):
+            try:
+                with open(log_file, "r", encoding="utf-8") as f:
+                    logs = json.load(f)
+            except:
+                logs = []
+        else:
+            logs = []
 
-    # 4. Visuals
-    VisualScout().download_visuals()
+        # Append and Save
+        logs.append(log_entry)
+        with open(log_file, "w", encoding="utf-8") as f:
+            json.dump(logs, f, indent=4)
 
-    # 5. Assemble
-    VideoAssembler().assemble()
+        print(f"✅ Log saved to: {log_file}")
+    else:
+        print("⚠️ Could not find task to log.")
 
-    # 6. Verify (Quality Control)
-    VideoVerifier().verify()
-
-    # 7. Upload Prep (Metadata & Logging)
-    UploadManager().prepare_package()
-
-    end_time = datetime.now()
-    print(f"\n✅ PIPELINE FINISHED | | End Time: {end_time}")
-    time_difference = end_time - start_time
-    print(f"\n🚀 Execution Complete! Runtime: {time_difference}")
+    print(f"\n✅ PRODUCTION COMPLETE for {slot_name}. Ready for Upload.")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--slot", type=str, help="Force: morning, noon, evening, night")
+    parser.add_argument(
+        "slot", help="The time slot (morning, noon, evening, night)", default="noon"
+    )
     args = parser.parse_args()
-    asyncio.run(run_pipeline(forced_slot=args.slot))
+
+    run_creation_pipeline(args.slot)
