@@ -1,41 +1,27 @@
-# Database & Env
-pymongo
-python-dotenv
+# Audio & Video Processing
+edge-tts              # Used in voice.py for text-to-speech
+moviepy               # Used in assembler.py for video editing
+mutagen               # Used in voice.py for MP3 metadata/duration
+openai-whisper        # Used in assembler.py for transcription (Import is 'whisper')
 
-# Networking & Scraping
-requests
-feedparser
+# Computer Vision & Image Processing
+opencv-python         # Used in verifier.py (Import is 'cv2')
+Pillow                # Used in visuals.py (Import is 'PIL')
+scikit-image          # Used in verifier.py (Import is 'skimage')
+numpy                 # Used in verifier.py for matrix operations
 
-# AI & Logic
-ollama
-openai-whisper
-numpy
+# AI & LLM Integration
+ollama                # Used in brain.py, scraper.py, and visuals.py
 
-# Audio & Voice
-edge-tts
-mutagen
+# Database & Environment
+pymongo               # Used in db_manager.py for MongoDB connection
+python-dotenv         # Used in db_manager.py and visuals.py for .env loading
 
-# Image & Video Processing
-moviepy
-pillow
-opencv-python
-scikit-image# --- Core & Database ---
-pymongo
-python-dotenv
-requests
+# Web Scraping & Networking
+feedparser            # Used in scraper.py for RSS feeds
+requests              # Used in scraper.py and visuals.py
 
-# --- Content Gathering ---
-feedparser
-ollama
-
-# --- Audio & Speech ---
-edge-tts
-mutagen
-openai-whisper
-
-# --- Video & Image Processing ---
-moviepy
-pillow
-opencv-python
-scikit-image
-numpy
+# YouTube API & Google Auth
+google-api-python-client  # Used in uploader.py
+google-auth-oauthlib      # Used in uploader.py
+google-auth               # Used in uploader.py
